@@ -162,7 +162,7 @@ function buildLessonSession(lesson) {
 }
 function buildReviewSession(words, mode) {
   const kinds = mode === 'write' ? ['write'] : mode === 'speak' ? ['speak'] : ['hz2ru', 'ru2hz', 'audio2hz', 'pinyin', 'sentence', 'tone', 'write', 'listen'].concat(recognizerAvailable() ? ['speak'] : []);
-  const items = shuffle(words).slice(0, mode === 'write' ? 8 : 20).map(w => {
+  const items = shuffle(words).slice(0, mode === 'write' ? 8 : mode === 'speak' ? 12 : 20).map(w => {
     let k = kinds[Math.floor(Math.random() * kinds.length)];
     if (k === 'tone' && !(w.hz.length === 1 && toneOf(syllables(w.py)[0]))) k = 'audio2hz';
     if (k === 'write' && !canWrite(w)) k = 'hz2ru';
@@ -492,7 +492,7 @@ function renderTask() {
     if (!s) return;
     const graded = s.graded || (s.graded = {});
     if (ok) { s.correct++; s.xp += 2; vibrate(15); } else { s.wrong++; vibrate([40, 40, 40]); }
-    if (s.mode !== 'lesson' && s.mode !== 'tones' && BY_HZ[w.hz] && (s.mode !== 'pics' || isLearned(w.hz)) && !graded[w.hz]) { grade(w.hz, ok); graded[w.hz] = true; save(); }
+    if (s.mode !== 'lesson' && s.mode !== 'tones' && BY_HZ[w.hz] && ((s.mode !== 'pics' && s.mode !== 'speak') || isLearned(w.hz)) && !graded[w.hz]) { grade(w.hz, ok); graded[w.hz] = true; save(); }
     if (!ok) s.requeue.push({ kind: t.kind, word: w });
     const foot = $('#sessionFoot');
     foot.innerHTML = `<div class="feedback ${ok ? 'ok' : 'bad'}"><b>${ok ? 'Верно' : 'Не совсем'}</b><span>${esc(answerText)}</span></div><button class="btn block ${ok ? 'btn-ok' : 'btn-bad'}" id="next">Дальше</button>`;
@@ -539,7 +539,7 @@ function renderHome() {
   const nd = DIALOGS.find(d => !S.dialogsDone[d.id] && S.lessonsDone[d.after]);
   if (nd) html += `<button class="action" id="goRead"><b>Прочитать диалог «${esc(nd.title)}»</b><span>Слова уже знакомы, ${nd.lines.length} реплик</span></button>`;
   html += `<button class="action" id="goPics"><b>Картинки</b><span>Подобрать иероглиф к картинке и картинку к иероглифу</span></button>`;
-  if (learned && recognizerAvailable()) html += `<button class="action" id="goSpeak"><b>Произношение</b><span>Скажите выученные слова вслух, приложение проверит слоги и тоны</span></button>`;
+  html += `<button class="action" id="goSpeak"><b>Произношение</b><span>Скажите слово вслух, приложение проверит слоги и тоны</span></button>`;
   if (learned) html += `<button class="action" id="goWrite"><b>Прописи</b><span>Написать пальцем ${Math.min(8, ALL_WORDS.filter(w => isLearned(w.hz) && canWrite(w)).length)} выученных слов</span></button>`;
   html += `</div>`;
 
@@ -556,7 +556,7 @@ function renderHome() {
   const gf = $('#goFree'); if (gf) gf.onclick = () => startSession(buildReviewSession(ALL_WORDS.filter(w => isLearned(w.hz)), 'free'));
   const grd = $('#goRead'); if (grd) grd.onclick = () => { route.tab = 'read'; route.dialog = nd.id; render(); };
   const gp = $('#goPics'); if (gp) gp.onclick = () => { route.tab = 'lessons'; route.page = 'pics'; render(); };
-  const gs = $('#goSpeak'); if (gs) gs.onclick = () => startSession(buildReviewSession(ALL_WORDS.filter(w => isLearned(w.hz)), 'speak'));
+  const gs = $('#goSpeak'); if (gs) gs.onclick = () => { route.tab = 'lessons'; route.page = 'speak'; render(); };
   const gw = $('#goWrite'); if (gw) gw.onclick = () => startSession(buildReviewSession(ALL_WORDS.filter(w => isLearned(w.hz) && canWrite(w)), 'write'));
 }
 
@@ -565,11 +565,13 @@ function renderLessons() {
   if (route.page === 'radicals') return renderRadicals();
   if (route.page === 'pics') return renderPics();
   if (route.page === 'tonepairs') return renderTonePairs();
+  if (route.page === 'speak') return renderSpeakPage();
   if (route.lesson) return renderLesson(LESSONS.find(l => l.id === route.lesson));
   setTop('Уроки');
   view.innerHTML = `
     <button class="row" id="rowTones"><span class="ic">🎵</span><span><div class="t">Тоны</div><div class="s">Четыре тона и нейтральный, с примерами</div></span><span class="chev">›</span></button>
     <button class="row" id="rowRad"><span class="ic">部</span><span><div class="t">Ключи иероглифов</div><div class="s">20 строительных блоков</div></span><span class="chev">›</span></button>
+    <button class="row" id="rowSpeak"><span class="ic">🎤</span><span><div class="t">Произношение</div><div class="s">Скажите слово, приложение проверит слоги и тоны</div></span><span class="chev">›</span></button>
     <button class="row" id="rowTonePairs"><span class="ic">🎯</span><span><div class="t">Тоновые пары</div><div class="s">Тренажёр слуха: один слог четырьмя тонами</div></span><span class="chev">›</span></button>
     <button class="row" id="rowPics"><span class="ic">🍎</span><span><div class="t">Картинки</div><div class="s">${PICS.reduce((a, c) => a + c.items.length, 0)} слов с картинкой: смотреть и проверять</div></span><span class="chev">›</span></button>
     ${[1, 2, 3, 4].map(level => {
@@ -586,6 +588,7 @@ function renderLessons() {
   $('#rowRad').onclick = () => { route.page = 'radicals'; render(); };
   $('#rowPics').onclick = () => { route.page = 'pics'; render(); };
   $('#rowTonePairs').onclick = () => { route.page = 'tonepairs'; render(); };
+  $('#rowSpeak').onclick = () => { route.page = 'speak'; render(); };
   view.querySelectorAll('[data-l]').forEach(b => b.onclick = () => { route.lesson = +b.dataset.l; render(); });
 }
 
@@ -673,7 +676,7 @@ function renderMore() {
       <label class="check"><input type="checkbox" id="autoplay" ${st.autoplay ? 'checked' : ''}><span>Озвучивать автоматически и листать верные ответы</span></label>
       <label class="check"><input type="checkbox" id="pyt" ${st.pinyinInTasks ? 'checked' : ''}><span>Показывать пиньинь в упражнениях (снимите, когда узнаёте иероглифы)</span></label>
       <button class="btn btn-light block" id="testVoice">Проверить китайский голос</button>
-      <p class="small">Распознавание речи для упражнения «Произнесите вслух»: ${SPEECH_OK === null ? 'проверяется…' : SPEECH_OK ? 'доступно' : 'недоступно на этом устройстве. Android: Настройки → Язык и ввод → Голосовой ввод, добавить китайский. Если распознавателя нет вовсе, упражнение не показывается.'}</p>
+
       <p class="small">${zhVoice ? `Голос: ${esc(zhVoice.name)}` : 'Китайский голос в системе не найден. Android: Настройки → Язык и ввод → Синтез речи → установить китайский. iPhone: Настройки → Универсальный доступ → Устный контент → Голоса → Китайский.'}</p>
     </div>
     <div class="card"><h2>Прогресс</h2>
@@ -685,7 +688,7 @@ function renderMore() {
     <div class="card"><h2>О приложении</h2>
       <p class="muted">Курс: ${ALL_WORDS.length} ${plural(ALL_WORDS.length, 'слово', 'слова', 'слов')} уровней HSK 1, 2 и 3 в ${LESSONS.length} ${plural(LESSONS.length, 'уроке', 'уроках', 'уроках')} с грамматикой, тоны, ключи иероглифов, интервальное повторение, ${DIALOGS.length} диалогов для чтения, прописи с проверкой черт. Бесплатно и без рекламы.</p>
       <p class="small">Словарь сверен ${CONTENT_VERIFIED}. Исходники открыты: github.com/mazurovmikhail-ui/nihao</p>
-      <p class="small">Версия 0.4.1 · <a href="privacy.html" target="_blank">Политика конфиденциальности</a></p>
+      <p class="small">Версия 0.4.2 · <a href="privacy.html" target="_blank">Политика конфиденциальности</a></p>
     </div>`;
   $('#goal').onchange = e => { st.goal = +e.target.value; save(); };
   $('#rate').oninput = e => { st.rate = +e.target.value; save(); };
@@ -916,6 +919,41 @@ function renderTonePairs() {
   $('#fab').hidden = false;
   $('#fab').textContent = 'Тренировать: 16 заданий';
   $('#fab').onclick = () => { $('#fab').hidden = true; startSession(buildToneSession()); };
+}
+
+
+/* Страница произношения: выбор слов и запуск тренировки */
+let speakSrc = 'learned';
+function speakSources() {
+  const learned = ALL_WORDS.filter(w => isLearned(w.hz));
+  const nl = nextLesson();
+  const list = [];
+  if (learned.length) list.push({ id: 'learned', title: `Выученные · ${learned.length}`, words: learned });
+  if (nl) list.push({ id: 'next', title: `Урок ${nl.id}: ${nl.title}`, words: nl.words.map(w => BY_HZ[w[0]]) });
+  [1, 2, 3, 4].forEach(l => list.push({ id: 'lv' + l, title: `Уровень ${l}`, words: ALL_WORDS.filter(w => (LESSONS.find(x => x.id === w.lesson).level || 1) === l) }));
+  list.push({ id: 'phrases', title: 'Фразы для поездки', words: ['谢谢', '不客气', '对不起', '没关系', '再见', '请', '多少', '钱', '好吃', '洗手间', '服务员', '等', '这', '那', '要'].map(h => BY_HZ[h]).filter(Boolean) });
+  return list;
+}
+function renderSpeakPage() {
+  setTop('Произношение');
+  const srcs = speakSources();
+  const cur = srcs.find(x => x.id === speakSrc) || srcs[0];
+  speakSrc = cur.id;
+  const status = SPEECH_OK === null ? 'проверяется…' : SPEECH_OK ? 'распознавание речи доступно' : 'распознавание речи недоступно на этом устройстве';
+  view.innerHTML = `
+    <h1 class="h1">Произношение</h1>
+    <p class="muted">Слово показывается с пиньинем, вы произносите его в микрофон. Телефон распознаёт речь, приложение сравнивает по слогам: зелёный слог верный, оранжевый со звуком в порядке, но тон не тот, красный не распознан.</p>
+    <div class="alert ${SPEECH_OK ? 'ok' : SPEECH_OK === false ? 'bad' : 'warn'}">${status}${SPEECH_OK === false ? '. Android: Настройки → Язык и ввод → Голосовой ввод, добавьте китайский язык, затем откройте приложение заново.' : ''}</div>
+    <h2 class="sec">Какие слова</h2>
+    <div class="chips">${srcs.map(x => `<button class="chip ${x.id === cur.id ? 'active' : ''}" data-s="${x.id}">${esc(x.title)}</button>`).join('')}</div>
+    <div class="words">${cur.words.slice(0, 30).map(w => `<div class="word" data-hz="${esc(w.hz)}"><div class="w-hz">${esc(w.hz)}</div><div><div class="w-py">${pinyinHtml(w.py)}</div><div class="w-ru">${esc(w.ru)}</div></div><div class="w-dot ${isLearned(w.hz) ? 'on' : ''}"></div></div>`).join('')}</div>
+    ${cur.words.length > 30 ? `<p class="small">Показаны первые 30 из ${cur.words.length}, в тренировку попадают случайные.</p>` : ''}
+    <div class="spacer"></div>`;
+  view.querySelectorAll('.chip').forEach(b => b.onclick = () => { speakSrc = b.dataset.s; renderSpeakPage(); });
+  view.querySelectorAll('.word').forEach(el => el.onclick = () => speak(el.dataset.hz));
+  $('#fab').hidden = !SPEECH_OK;
+  $('#fab').textContent = `Тренировать: ${Math.min(12, cur.words.length)} слов`;
+  $('#fab').onclick = () => { $('#fab').hidden = true; startSession(buildReviewSession(cur.words, 'speak')); };
 }
 
 /* Разбор иероглифа */
