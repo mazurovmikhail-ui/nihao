@@ -55,6 +55,12 @@ jobs:
       - name: Синхронизация
         run: npx cap sync android
 
+      - name: Номер версии из package.json и номера сборки
+        run: |
+          VER=$(node -p "require('./package.json').version")
+          sed -i "s/versionCode 1$/versionCode ${{ github.run_number }}/; s/versionName \"1.0\"/versionName \"$VER\"/" android/app/build.gradle
+          grep -n "versionCode\|versionName" android/app/build.gradle
+
       - name: Отладочный APK
         run: |
           cd android

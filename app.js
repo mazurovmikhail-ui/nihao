@@ -186,13 +186,13 @@ function endSession() {
   $('#sessBody').innerHTML = `
     <div class="done">
       <div class="done-emoji">${s.wrong === 0 ? '🎉' : '👍'}</div>
-      <h2>${s.mode === 'lesson' ? 'Урок пройден' : 'Повторение закончено'}</h2>
+      <h2>${({ lesson: 'Урок пройден', pics: 'Картинки пройдены', write: 'Прописи закончены', free: 'Практика закончена' })[s.mode] || 'Повторение закончено'}</h2>
       <div class="done-stats">
         <div><b>${s.correct}</b><span>верно</span></div>
         <div><b>${s.wrong}</b><span>${plural(s.wrong, 'ошибка', 'ошибки', 'ошибок')}</span></div>
         <div><b>+${s.xp}</b><span>очков</span></div>
       </div>
-      <p class="muted">${s.mode === 'lesson' ? 'Слова урока попали в повторение. Завтра приложение спросит их снова.' : 'Следующая порция придёт, когда подойдёт срок.'}</p>
+      <p class="muted">${s.mode === 'lesson' ? 'Слова урока попали в повторение. Завтра приложение спросит их снова.' : s.mode === 'pics' ? 'Картинки закрепляют слова, а в повторение они попадают из уроков.' : 'Следующая порция придёт, когда подойдёт срок.'}</p>
       <p class="muted">Серия: ${S.streak.count} ${plural(S.streak.count, 'день', 'дня', 'дней')} 🔥</p>
     </div>`;
   $('#sessionFoot').innerHTML = `<button class="btn block" id="sessClose">Готово</button>`;
@@ -309,6 +309,35 @@ function renderTask() {
     return;
   }
 
+  if (t.kind === 'pic2hz' || t.kind === 'hz2pic') {
+    const cat = PICS.find(c => c.items.some(it => it[0] === w.hz)) || PICS[0];
+    const emojiOf = hz => (cat.items.find(it => it[0] === hz) || ['', '❔'])[1];
+    const pool = shuffle(cat.items.filter(it => it[0] !== w.hz && it[1] !== emojiOf(w.hz))).slice(0, 3).map(it => BY_HZ[it[0]]).filter(Boolean);
+    const opts = shuffle([w].concat(pool));
+    if (t.kind === 'pic2hz') {
+      body.innerHTML = `
+        <div class="task-label">Что на картинке?</div>
+        <div class="prompt"><div class="emoji-big">${emojiOf(w.hz)}</div></div>
+        <div class="options">${opts.map((o, i) => `<button class="opt" data-i="${i}"><span class="opt-hz">${esc(o.hz)}</span>${py ? `<span class="opt-py">${pinyinHtml(o.py)}</span>` : ''}</button>`).join('')}</div>`;
+    } else {
+      body.innerHTML = `
+        <div class="task-label">Найдите картинку</div>
+        <div class="prompt" id="playP"><div class="hz-big">${esc(w.hz)}</div>${py ? `<div class="py-mid">${pinyinHtml(w.py)}</div>` : ''}<div class="speaker">🔊</div></div>
+        <div class="pic-grid">${opts.map((o, i) => `<button class="opt pic-opt" data-i="${i}"><span class="emoji">${emojiOf(o.hz)}</span></button>`).join('')}</div>`;
+      $('#playP').onclick = () => speak(w.hz);
+      if (S.settings.autoplay) speak(w.hz);
+    }
+    body.querySelectorAll('.opt').forEach(b => b.onclick = () => {
+      const chosen = opts[+b.dataset.i];
+      const ok = chosen.hz === w.hz;
+      body.querySelectorAll('.opt').forEach(x => { x.disabled = true; if (opts[+x.dataset.i].hz === w.hz) x.classList.add('right'); });
+      if (!ok) b.classList.add('wrong');
+      speak(w.hz);
+      finish(ok, `${emojiOf(w.hz)} ${w.hz} · ${w.py} · ${w.ru}`);
+    });
+    return;
+  }
+
   if (t.kind === 'write') {
     const chars = [...w.hz];
     body.innerHTML = `
@@ -367,7 +396,7 @@ function renderTask() {
     if (!s) return;
     const graded = s.graded || (s.graded = {});
     if (ok) { s.correct++; s.xp += 2; vibrate(15); } else { s.wrong++; vibrate([40, 40, 40]); }
-    if (s.mode !== 'lesson' && !graded[w.hz]) { grade(w.hz, ok); graded[w.hz] = true; save(); }
+    if (s.mode !== 'lesson' && (s.mode !== 'pics' || isLearned(w.hz)) && !graded[w.hz]) { grade(w.hz, ok); graded[w.hz] = true; save(); }
     if (!ok) s.requeue.push({ kind: t.kind, word: w });
     const foot = $('#sessionFoot');
     foot.innerHTML = `<div class="feedback ${ok ? 'ok' : 'bad'}"><b>${ok ? 'Верно' : 'Не совсем'}</b><span>${esc(answerText)}</span></div><button class="btn block ${ok ? 'btn-ok' : 'btn-bad'}" id="next">Дальше</button>`;
@@ -413,6 +442,7 @@ function renderHome() {
   if (!due.length && learned) html += `<button class="action" id="goFree"><b>Свободная практика</b><span>Случайные слова из выученных</span></button>`;
   const nd = DIALOGS.find(d => !S.dialogsDone[d.id] && S.lessonsDone[d.after]);
   if (nd) html += `<button class="action" id="goRead"><b>Прочитать диалог «${esc(nd.title)}»</b><span>Слова уже знакомы, ${nd.lines.length} реплик</span></button>`;
+  html += `<button class="action" id="goPics"><b>Картинки</b><span>Подобрать иероглиф к картинке и картинку к иероглифу</span></button>`;
   if (learned) html += `<button class="action" id="goWrite"><b>Прописи</b><span>Написать пальцем ${Math.min(8, ALL_WORDS.filter(w => isLearned(w.hz) && canWrite(w)).length)} выученных слов</span></button>`;
   html += `</div>`;
 
@@ -428,17 +458,20 @@ function renderHome() {
   const gl = $('#goLesson'); if (gl) gl.onclick = () => startSession(buildLessonSession(nl));
   const gf = $('#goFree'); if (gf) gf.onclick = () => startSession(buildReviewSession(ALL_WORDS.filter(w => isLearned(w.hz)), 'free'));
   const grd = $('#goRead'); if (grd) grd.onclick = () => { route.tab = 'read'; route.dialog = nd.id; render(); };
+  const gp = $('#goPics'); if (gp) gp.onclick = () => { route.tab = 'lessons'; route.page = 'pics'; render(); };
   const gw = $('#goWrite'); if (gw) gw.onclick = () => startSession(buildReviewSession(ALL_WORDS.filter(w => isLearned(w.hz) && canWrite(w)), 'write'));
 }
 
 function renderLessons() {
   if (route.page === 'tones') return renderTones();
   if (route.page === 'radicals') return renderRadicals();
+  if (route.page === 'pics') return renderPics();
   if (route.lesson) return renderLesson(LESSONS.find(l => l.id === route.lesson));
   setTop('Уроки');
   view.innerHTML = `
     <button class="row" id="rowTones"><span class="ic">🎵</span><span><div class="t">Тоны</div><div class="s">Четыре тона и нейтральный, с примерами</div></span><span class="chev">›</span></button>
     <button class="row" id="rowRad"><span class="ic">部</span><span><div class="t">Ключи иероглифов</div><div class="s">20 строительных блоков</div></span><span class="chev">›</span></button>
+    <button class="row" id="rowPics"><span class="ic">🍎</span><span><div class="t">Картинки</div><div class="s">${PICS.reduce((a, c) => a + c.items.length, 0)} слов с картинкой: смотреть и проверять</div></span><span class="chev">›</span></button>
     ${[1, 2, 3].map(level => {
       const ls = LESSONS.filter(l => (l.level || 1) === level);
       const total = ls.reduce((a, l) => a + l.words.length, 0);
@@ -451,6 +484,7 @@ function renderLessons() {
     }).join('')}`;
   $('#rowTones').onclick = () => { route.page = 'tones'; render(); };
   $('#rowRad').onclick = () => { route.page = 'radicals'; render(); };
+  $('#rowPics').onclick = () => { route.page = 'pics'; render(); };
   view.querySelectorAll('[data-l]').forEach(b => b.onclick = () => { route.lesson = +b.dataset.l; render(); });
 }
 
@@ -545,6 +579,7 @@ function renderMore() {
     <div class="card"><h2>О приложении</h2>
       <p class="muted">Курс: ${ALL_WORDS.length} ${plural(ALL_WORDS.length, 'слово', 'слова', 'слов')} уровней HSK 1, 2 и 3 в ${LESSONS.length} ${plural(LESSONS.length, 'уроке', 'уроках', 'уроках')} с грамматикой, тоны, ключи иероглифов, интервальное повторение, ${DIALOGS.length} диалогов для чтения, прописи с проверкой черт. Бесплатно и без рекламы.</p>
       <p class="small">Словарь сверен ${CONTENT_VERIFIED}. Исходники открыты: github.com/mazurovmikhail-ui/nihao</p>
+      <p class="small">Версия 0.3 · <a href="privacy.html" target="_blank">Политика конфиденциальности</a></p>
     </div>`;
   $('#goal').onchange = e => { st.goal = +e.target.value; save(); };
   $('#rate').oninput = e => { st.rate = +e.target.value; save(); };
@@ -578,6 +613,26 @@ async function writer(hz, mode) {
   });
   if (mode === 'animate') { for (const w of writers) await new Promise(r => w.animateCharacter({ onComplete: r })); }
   else writers.forEach(w => { w.hideCharacter(); w.quiz(); });
+}
+
+function buildPicSession(cat) {
+  const items = shuffle(cat.items.map(it => BY_HZ[it[0]]).filter(Boolean)).slice(0, 12).map((w, i) => ({ kind: i % 2 ? 'hz2pic' : 'pic2hz', word: w }));
+  return { mode: 'pics', items, i: 0, correct: 0, wrong: 0, requeue: [], xp: 0, graded: {} };
+}
+let picCat = 0;
+function renderPics() {
+  setTop('Картинки');
+  const cat = PICS[picCat] || PICS[0];
+  view.innerHTML = `
+    <p class="muted" style="margin-bottom:10px">Смотрите и запоминайте: картинка, иероглиф, звучание. Нажмите карточку, чтобы услышать слово. Потом проверьте себя: приложение покажет картинку и спросит иероглиф, и наоборот.</p>
+    <div class="chips">${PICS.map((c, i) => `<button class="chip ${i === picCat ? 'active' : ''}" data-i="${i}">${esc(c.cat)}</button>`).join('')}</div>
+    <div class="pic-cards">${cat.items.map(it => { const w = BY_HZ[it[0]]; if (!w) return ''; return `<button class="pic-card ${isLearned(w.hz) ? 'known' : ''}" data-hz="${esc(w.hz)}"><span class="emoji">${it[1]}</span><span class="hz">${esc(w.hz)}</span><span class="py">${pinyinHtml(w.py)}</span><span class="ru">${esc(w.ru)}</span></button>`; }).join('')}</div>
+    <div class="spacer"></div>`;
+  view.querySelectorAll('.chip').forEach(b => b.onclick = () => { picCat = +b.dataset.i; renderPics(); });
+  view.querySelectorAll('.pic-card').forEach(b => b.onclick = () => speak(b.dataset.hz));
+  $('#fab').hidden = false;
+  $('#fab').textContent = `Проверить: ${cat.cat}`;
+  $('#fab').onclick = () => { $('#fab').hidden = true; startSession(buildPicSession(cat)); };
 }
 
 function dialogTokens(d) { return d.lines.flatMap(l => l[1].split(' ')).filter(t => /[一-鿿]/.test(t)); }

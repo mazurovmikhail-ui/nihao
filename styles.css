@@ -223,3 +223,17 @@ input[type=range] { padding: 0; border: 0; }
 .quiz { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px; margin-bottom: 12px; }
 .quiz h3 { font-size: 16px; margin: 0 0 10px; }
 .quiz .opt { margin-bottom: 8px; font-size: 15px; padding: 12px 14px; }
+
+/* Картинки */
+.emoji-big { font-size: 96px; line-height: 1.1; }
+.pic-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pic-opt { justify-content: center; padding: 18px 0; }
+.pic-opt .emoji { font-size: 56px; line-height: 1; }
+.pic-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.pic-card { display: flex; flex-direction: column; align-items: center; gap: 2px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 6px 10px; cursor: pointer; text-align: center; }
+.pic-card.known { border-color: #bfe3c8; }
+.pic-card .emoji { font-size: 40px; line-height: 1.1; }
+.pic-card .hz { font-size: 20px; font-weight: 600; margin-top: 4px; }
+.pic-card .py { font-size: 12px; }
+.pic-card .ru { font-size: 11px; color: var(--ink-3); }
+.pic-card:active { background: #f7f7f5; }
