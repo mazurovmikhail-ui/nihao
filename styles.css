@@ -84,6 +84,7 @@ p { margin: 0 0 8px; }
 .row .num { width: 34px; height: 34px; border-radius: 50%; background: var(--ink); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; flex: 0 0 auto; }
 .row .num.lv2 { background: #7c3aed; }
 .row .num.lv3 { background: #0e7490; }
+.row .num.lv4 { background: #b45309; }
 .row.done .num { background: var(--ok); }
 .row .t { font-weight: 700; font-size: 16px; }
 .row .s { color: var(--ink-2); font-size: 13px; margin-top: 2px; }
@@ -237,3 +238,26 @@ input[type=range] { padding: 0; border: 0; }
 .pic-card .py { font-size: 12px; }
 .pic-card .ru { font-size: 11px; color: var(--ink-3); }
 .pic-card:active { background: #f7f7f5; }
+
+/* Из жизни, разбор, произношение, истории */
+.culture { background: #fff7e6; border: 1px solid #f2dfb0; border-radius: 12px; padding: 10px 12px; margin-top: 12px; font-size: 14px; color: #5a3d0b; }
+.culture-k { display: block; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #b45309; margin-bottom: 3px; font-weight: 700; }
+.dc { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; }
+.dc-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+.dc-char { font-size: 30px; font-weight: 600; }
+.dc-py { color: var(--ink-2); }
+.dc-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: 14px; margin-top: 4px; }
+.dc-k { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); min-width: 64px; }
+.dc-comp { font-size: 22px; border: 1px solid var(--line); border-radius: 8px; padding: 0 8px; cursor: pointer; background: #fbfbf9; }
+.dc-name { color: var(--ink-2); margin-right: 6px; }
+.dc-word { font-size: 18px; border-bottom: 1px dotted var(--accent); cursor: pointer; margin-right: 6px; }
+.mic { display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%; border: 0; border-radius: 16px; padding: 22px; background: var(--ink); color: #fff; font-size: 18px; font-weight: 700; cursor: pointer; margin: 6px 0 12px; }
+.mic .mic-ic { font-size: 30px; }
+.mic.rec { background: var(--accent); animation: pulse 1s infinite; }
+@keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.02); } 100% { transform: scale(1); } }
+.heard { text-align: center; min-height: 24px; }
+.heard-syl { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
+.hs.ok { color: var(--ok); } .hs.tone { color: #d97706; } .hs.bad { color: var(--bad); }
+.bubble.n { max-width: 100%; align-self: stretch; background: #fbfbf9; }
+.bubble.n .who { display: none; }
+.tone-sets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }

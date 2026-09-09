@@ -1,15 +1,16 @@
 {
   "name": "nihao",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
-  "description": "Нихао: китайский с нуля. HSK 1 по урокам, тоны, интервальное повторение, офлайн.",
+  "description": "Нихао: китайский с нуля. HSK 1–4 по урокам, тоны, прописи, произношение, интервальное повторение, офлайн.",
   "scripts": {
-    "www": "node -e \"const fs=require('fs');fs.mkdirSync('www',{recursive:true});for(const f of ['index.html','styles.css','app.js','data.js','data-hsk2.js','data-hsk3.js','data-hsk3b.js','data-dialogs.js','data-pics.js','strokes.js','hanzi-writer.min.js','manifest.webmanifest','icon.svg','icon-maskable.svg'])fs.copyFileSync(f,'www/'+f)\"",
+    "www": "node -e \"const fs=require('fs');fs.mkdirSync('www',{recursive:true});for(const f of ['index.html','styles.css','app.js','data.js','data-hsk2.js','data-hsk3.js','data-hsk3b.js','data-dialogs.js','data-pics.js','data-hsk4a.js','data-hsk4b.js','data-hsk4c.js','data-hsk4d.js','data-dialogs2.js','data-culture.js','data-tones.js','decomp.js','strokes.js','hanzi-writer.min.js','manifest.webmanifest','icon.svg','icon-maskable.svg'])fs.copyFileSync(f,'www/'+f)\"",
     "sync": "npm run www && npx cap sync"
   },
   "dependencies": {
     "@capacitor/android": "^7.0.0",
-    "@capacitor/core": "^7.0.0"
+    "@capacitor/core": "^7.0.0",
+    "@capacitor-community/speech-recognition": "^7.0.0"
   },
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",
