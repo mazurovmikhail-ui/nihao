@@ -4,7 +4,7 @@
   "private": true,
   "description": "Нихао: китайский с нуля. HSK 1 по урокам, тоны, интервальное повторение, офлайн.",
   "scripts": {
-    "www": "node -e \"const fs=require('fs');fs.mkdirSync('www',{recursive:true});for(const f of ['index.html','styles.css','app.js','data.js','manifest.webmanifest','icon.svg','icon-maskable.svg'])fs.copyFileSync(f,'www/'+f)\"",
+    "www": "node -e \"const fs=require('fs');fs.mkdirSync('www',{recursive:true});for(const f of ['index.html','styles.css','app.js','data.js','data-hsk2.js','manifest.webmanifest','icon.svg','icon-maskable.svg'])fs.copyFileSync(f,'www/'+f)\"",
     "sync": "npm run www && npx cap sync"
   },
   "dependencies": {

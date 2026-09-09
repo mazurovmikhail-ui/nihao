@@ -1,6 +1,6 @@
 /* Офлайн-кэш оболочки. Прогресс пользователя в localStorage, его это не касается. */
-const CACHE = 'nihao-v1';
-const SHELL = ['./', './index.html', './styles.css', './app.js', './data.js', './manifest.webmanifest', './icon.svg', './icon-maskable.svg'];
+const CACHE = 'nihao-v2';
+const SHELL = ['./', './index.html', './styles.css', './app.js', './data.js', './data-hsk2.js', './manifest.webmanifest', './icon.svg', './icon-maskable.svg'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));

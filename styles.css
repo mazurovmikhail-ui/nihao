@@ -82,6 +82,7 @@ p { margin: 0 0 8px; }
 .row.done { opacity: .75; }
 .row .ic { font-size: 24px; width: 34px; text-align: center; flex: 0 0 auto; }
 .row .num { width: 34px; height: 34px; border-radius: 50%; background: var(--ink); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; flex: 0 0 auto; }
+.row .num.lv2 { background: #7c3aed; }
 .row.done .num { background: var(--ok); }
 .row .t { font-weight: 700; font-size: 16px; }
 .row .s { color: var(--ink-2); font-size: 13px; margin-top: 2px; }

@@ -404,12 +404,16 @@ function renderLessons() {
   view.innerHTML = `
     <button class="row" id="rowTones"><span class="ic">🎵</span><span><div class="t">Тоны</div><div class="s">Четыре тона и нейтральный, с примерами</div></span><span class="chev">›</span></button>
     <button class="row" id="rowRad"><span class="ic">部</span><span><div class="t">Ключи иероглифов</div><div class="s">20 строительных блоков</div></span><span class="chev">›</span></button>
-    <h2 class="sec">Уровень 1 · ${ALL_WORDS.length} слов</h2>
-    <div class="list">${LESSONS.map(l => {
-      const n = l.words.filter(w => isLearned(w[0])).length;
-      const done = S.lessonsDone[l.id];
-      return `<button class="row ${done ? 'done' : ''}" data-l="${l.id}"><span class="num">${l.id}</span><span><div class="t">${esc(l.title)}</div><div class="s">${done ? 'Пройден · ' : ''}${n} из ${l.words.length} слов в повторении</div></span><span class="chev">${done ? '✓' : '›'}</span></button>`;
-    }).join('')}</div>`;
+    ${[1, 2].map(level => {
+      const ls = LESSONS.filter(l => (l.level || 1) === level);
+      const total = ls.reduce((a, l) => a + l.words.length, 0);
+      return `<h2 class="sec">Уровень ${level} · HSK ${level} · ${total} слов</h2>
+      <div class="list">${ls.map(l => {
+        const n = l.words.filter(w => isLearned(w[0])).length;
+        const done = S.lessonsDone[l.id];
+        return `<button class="row ${done ? 'done' : ''}" data-l="${l.id}"><span class="num ${level === 2 ? 'lv2' : ''}">${l.id}</span><span><div class="t">${esc(l.title)}</div><div class="s">${done ? 'Пройден · ' : ''}${n} из ${l.words.length} слов в повторении</div></span><span class="chev">${done ? '✓' : '›'}</span></button>`;
+      }).join('')}</div>`;
+    }).join('')}`;
   $('#rowTones').onclick = () => { route.page = 'tones'; render(); };
   $('#rowRad').onclick = () => { route.page = 'radicals'; render(); };
   view.querySelectorAll('[data-l]').forEach(b => b.onclick = () => { route.lesson = +b.dataset.l; render(); });
@@ -504,7 +508,7 @@ function renderMore() {
       <p class="small">Прогресс лежит только в этом телефоне. «Скопировать» кладёт его в буфер обмена, чтобы перенести на другое устройство.</p>
     </div>
     <div class="card"><h2>О приложении</h2>
-      <p class="muted">Курс: 150 слов уровня HSK 1 по 16 урокам с грамматикой, тоны, ключи иероглифов, интервальное повторение. Бесплатно и без рекламы.</p>
+      <p class="muted">Курс: ${ALL_WORDS.length} ${plural(ALL_WORDS.length, 'слово', 'слова', 'слов')} уровней HSK 1 и HSK 2 в ${LESSONS.length} ${plural(LESSONS.length, 'уроке', 'уроках', 'уроках')} с грамматикой, тоны, ключи иероглифов, интервальное повторение. Бесплатно и без рекламы.</p>
       <p class="small">Словарь сверен ${CONTENT_VERIFIED}. Исходники открыты: github.com/mazurovmikhail-ui/nihao</p>
     </div>`;
   $('#goal').onchange = e => { st.goal = +e.target.value; save(); };
