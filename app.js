@@ -12,6 +12,7 @@ const BY_HZ = Object.fromEntries(ALL_WORDS.map(w => [w.hz, w]));
 const defaults = () => ({
   cards: {},                 /* hz → { due, ivl, ease, reps, lapses } */
   lessonsDone: {},
+  dialogsDone: {},
   tonesSeen: false,
   streak: { count: 0, last: null },
   xp: { total: 0, byDay: {} },
@@ -133,6 +134,7 @@ function distractors(word, field, n) {
   for (const w of same.concat(pool)) { if (out.length >= n) break; if (!out.some(o => o[field] === w[field])) out.push(w); }
   return out;
 }
+const canWrite = w => /^[\u4e00-\u9fff]{1,3}$/.test(w.hz);
 function tasksFor(word, kinds) {
   return kinds.map(k => ({ kind: k, word }));
 }
@@ -150,14 +152,16 @@ function buildLessonSession(lesson) {
     });
     items.push(...shuffle(drills));
     items.push(...shuffle(chunk.map(w => ({ kind: Math.random() < 0.5 ? 'pinyin' : 'sentence', word: w }))));
+    items.push(...shuffle(chunk.filter(canWrite)).slice(0, 2).map(w => ({ kind: 'write', word: w })));
   });
   return { mode: 'lesson', lesson, items, i: 0, correct: 0, wrong: 0, requeue: [], xp: 0 };
 }
 function buildReviewSession(words, mode) {
-  const kinds = ['hz2ru', 'ru2hz', 'audio2hz', 'pinyin', 'sentence', 'tone'];
-  const items = shuffle(words).slice(0, 20).map(w => {
+  const kinds = mode === 'write' ? ['write'] : ['hz2ru', 'ru2hz', 'audio2hz', 'pinyin', 'sentence', 'tone', 'write'];
+  const items = shuffle(words).slice(0, mode === 'write' ? 8 : 20).map(w => {
     let k = kinds[Math.floor(Math.random() * kinds.length)];
     if (k === 'tone' && !(w.hz.length === 1 && toneOf(syllables(w.py)[0]))) k = 'audio2hz';
+    if (k === 'write' && !canWrite(w)) k = 'hz2ru';
     return { kind: k, word: w };
   });
   return { mode: mode || 'review', items, i: 0, correct: 0, wrong: 0, requeue: [], xp: 0, graded: {} };
@@ -305,6 +309,32 @@ function renderTask() {
     return;
   }
 
+  if (t.kind === 'write') {
+    const chars = [...w.hz];
+    body.innerHTML = `
+      <div class="task-label">Напишите ${chars.length > 1 ? 'иероглифы' : 'иероглиф'}</div>
+      <div class="prompt" id="playP"><div class="ru-prompt">${esc(w.ru)}</div>${py ? `<div class="py-mid">${pinyinHtml(w.py)}</div>` : ''}<div class="speaker">🔊</div></div>
+      <div class="write-box" id="wbox"></div>
+      <div class="write-hint"><button class="btn btn-light" id="wShow">Показать контур</button></div>
+      <p class="small" style="text-align:center">Рисуйте пальцем черту за чертой в правильном порядке. После двух ошибок появится подсказка.</p>`;
+    $('#playP').onclick = () => speak(w.hz);
+    if (S.settings.autoplay) speak(w.hz);
+    const box = $('#wbox');
+    const size = Math.max(90, Math.min(150, Math.floor((box.clientWidth || 320) / chars.length) - 14));
+    let done = 0, mistakes = 0;
+    const writers = chars.map(ch => {
+      const d = document.createElement('div'); d.className = 'hw'; box.appendChild(d);
+      const hw = HanziWriter.create(d, ch, Object.assign({ width: size, height: size, padding: 6, showOutline: false, showCharacter: false, strokeColor: '#16181d', drawingColor: '#c8102e', drawingWidth: 9, showHintAfterMisses: 2, highlightOnComplete: true, onLoadCharDataError: () => { d.innerHTML = '<span class="muted">?</span>'; } }, HW_OPTS));
+      hw.quiz({
+        onMistake: () => { mistakes++; },
+        onComplete: () => { d.classList.add('done'); done++; if (done === chars.length) finish(mistakes <= chars.length * 3, `${w.hz} · ${w.py}${mistakes ? ` · ошибок в чертах: ${mistakes}` : ' · без ошибок'}`); }
+      });
+      return hw;
+    });
+    $('#wShow').onclick = () => { mistakes += 2; writers.forEach(hw => hw.showOutline()); };
+    return;
+  }
+
   if (t.kind === 'sentence') {
     const raw = w.ex.split(' ');
     const punct = raw.filter(x => /^[。！？，]+$/.test(x)).join('');
@@ -347,12 +377,12 @@ function renderTask() {
 }
 
 /* ---------- 6. Экраны ---------- */
-let route = { tab: 'home', lesson: null, page: null, q: '' };
+let route = { tab: 'home', lesson: null, page: null, dialog: null, q: '' };
 
 function render() {
   document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === route.tab));
-  $('#btnBack').hidden = !(route.lesson || route.page);
-  ({ home: renderHome, lessons: renderLessons, dict: renderDict, more: renderMore })[route.tab]();
+  $('#btnBack').hidden = !(route.lesson || route.page || route.dialog);
+  ({ home: renderHome, lessons: renderLessons, read: renderReading, dict: renderDict, more: renderMore })[route.tab]();
   window.scrollTo(0, 0);
 }
 function setTop(t) { $('#topline').textContent = t; }
@@ -381,6 +411,9 @@ function renderHome() {
   if (due.length) html += `<button class="action primary" id="goReview"><b>Повторить ${due.length} ${plural(due.length, 'слово', 'слова', 'слов')}</b><span>Подошёл срок, память ещё держит</span></button>`;
   if (nl) html += `<button class="action ${due.length ? '' : 'primary'}" id="goLesson"><b>Урок ${nl.id}: ${esc(nl.title)}</b><span>${nl.words.length} новых слов, около 10 минут</span></button>`;
   if (!due.length && learned) html += `<button class="action" id="goFree"><b>Свободная практика</b><span>Случайные слова из выученных</span></button>`;
+  const nd = DIALOGS.find(d => !S.dialogsDone[d.id] && S.lessonsDone[d.after]);
+  if (nd) html += `<button class="action" id="goRead"><b>Прочитать диалог «${esc(nd.title)}»</b><span>Слова уже знакомы, ${nd.lines.length} реплик</span></button>`;
+  if (learned) html += `<button class="action" id="goWrite"><b>Прописи</b><span>Написать пальцем ${Math.min(8, ALL_WORDS.filter(w => isLearned(w.hz) && canWrite(w)).length)} выученных слов</span></button>`;
   html += `</div>`;
 
   html += `<div class="card"><h2>Прогресс</h2>
@@ -394,6 +427,8 @@ function renderHome() {
   const gr = $('#goReview'); if (gr) gr.onclick = () => startSession(buildReviewSession(due));
   const gl = $('#goLesson'); if (gl) gl.onclick = () => startSession(buildLessonSession(nl));
   const gf = $('#goFree'); if (gf) gf.onclick = () => startSession(buildReviewSession(ALL_WORDS.filter(w => isLearned(w.hz)), 'free'));
+  const grd = $('#goRead'); if (grd) grd.onclick = () => { route.tab = 'read'; route.dialog = nd.id; render(); };
+  const gw = $('#goWrite'); if (gw) gw.onclick = () => startSession(buildReviewSession(ALL_WORDS.filter(w => isLearned(w.hz) && canWrite(w)), 'write'));
 }
 
 function renderLessons() {
@@ -404,14 +439,14 @@ function renderLessons() {
   view.innerHTML = `
     <button class="row" id="rowTones"><span class="ic">🎵</span><span><div class="t">Тоны</div><div class="s">Четыре тона и нейтральный, с примерами</div></span><span class="chev">›</span></button>
     <button class="row" id="rowRad"><span class="ic">部</span><span><div class="t">Ключи иероглифов</div><div class="s">20 строительных блоков</div></span><span class="chev">›</span></button>
-    ${[1, 2].map(level => {
+    ${[1, 2, 3].map(level => {
       const ls = LESSONS.filter(l => (l.level || 1) === level);
       const total = ls.reduce((a, l) => a + l.words.length, 0);
       return `<h2 class="sec">Уровень ${level} · HSK ${level} · ${total} слов</h2>
       <div class="list">${ls.map(l => {
         const n = l.words.filter(w => isLearned(w[0])).length;
         const done = S.lessonsDone[l.id];
-        return `<button class="row ${done ? 'done' : ''}" data-l="${l.id}"><span class="num ${level === 2 ? 'lv2' : ''}">${l.id}</span><span><div class="t">${esc(l.title)}</div><div class="s">${done ? 'Пройден · ' : ''}${n} из ${l.words.length} слов в повторении</div></span><span class="chev">${done ? '✓' : '›'}</span></button>`;
+        return `<button class="row ${done ? 'done' : ''}" data-l="${l.id}"><span class="num ${level > 1 ? 'lv' + level : ''}">${l.id}</span><span><div class="t">${esc(l.title)}</div><div class="s">${done ? 'Пройден · ' : ''}${n} из ${l.words.length} слов в повторении</div></span><span class="chev">${done ? '✓' : '›'}</span></button>`;
       }).join('')}</div>`;
     }).join('')}`;
   $('#rowTones').onclick = () => { route.page = 'tones'; render(); };
@@ -476,7 +511,7 @@ function openWord(w) {
     <div class="kv"><span>Статус</span><b>${c ? `в повторении, интервал ${c.ivl} ${plural(c.ivl, 'день', 'дня', 'дней')}` : 'ещё не учили'}</b></div>
     <div class="writer" id="writer"></div>
     <div class="writer-btns"><button class="btn btn-light" id="wAnim">Порядок черт</button><button class="btn btn-light" id="wQuiz">Прописать</button></div>
-    <p class="small">Прописи подгружаются из сети, офлайн недоступны.</p>`;
+    <p class="small">Прописи работают без сети: порядок черт встроен в приложение.</p>`;
   sheet.hidden = false; $('#backdrop').hidden = false;
   $('#shPlay').onclick = () => speak(w.hz);
   $('#shEx').onclick = () => speak(w.ex);
@@ -508,7 +543,7 @@ function renderMore() {
       <p class="small">Прогресс лежит только в этом телефоне. «Скопировать» кладёт его в буфер обмена, чтобы перенести на другое устройство.</p>
     </div>
     <div class="card"><h2>О приложении</h2>
-      <p class="muted">Курс: ${ALL_WORDS.length} ${plural(ALL_WORDS.length, 'слово', 'слова', 'слов')} уровней HSK 1 и HSK 2 в ${LESSONS.length} ${plural(LESSONS.length, 'уроке', 'уроках', 'уроках')} с грамматикой, тоны, ключи иероглифов, интервальное повторение. Бесплатно и без рекламы.</p>
+      <p class="muted">Курс: ${ALL_WORDS.length} ${plural(ALL_WORDS.length, 'слово', 'слова', 'слов')} уровней HSK 1, 2 и 3 в ${LESSONS.length} ${plural(LESSONS.length, 'уроке', 'уроках', 'уроках')} с грамматикой, тоны, ключи иероглифов, интервальное повторение, ${DIALOGS.length} диалогов для чтения, прописи с проверкой черт. Бесплатно и без рекламы.</p>
       <p class="small">Словарь сверен ${CONTENT_VERIFIED}. Исходники открыты: github.com/mazurovmikhail-ui/nihao</p>
     </div>`;
   $('#goal').onchange = e => { st.goal = +e.target.value; save(); };
@@ -522,36 +557,88 @@ function renderMore() {
   $('#reset').onclick = () => { if (confirm('Стереть весь прогресс?')) { localStorage.removeItem(KEY); S = load(); render(); } };
 }
 
-/* ---------- 7. Прописи (hanzi-writer, только онлайн) ---------- */
-let hwLoading = null;
-function loadWriter() {
-  if (window.HanziWriter) return Promise.resolve();
-  if (hwLoading) return hwLoading;
-  hwLoading = new Promise((res, rej) => {
-    const s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/hanzi-writer@3.7.3/dist/hanzi-writer.min.js';
-    s.onload = res; s.onerror = () => { hwLoading = null; rej(); };
-    document.head.appendChild(s);
-  });
-  return hwLoading;
-}
+/* ---------- 7. Прописи и чтение ---------- */
+/* Библиотека hanzi-writer и данные о чертах лежат в самом приложении, сеть нужна только
+   для иероглифов вне курса. */
+const HW_OPTS = {
+  charDataLoader: (ch, onLoad, onErr) => {
+    if (typeof STROKES !== 'undefined' && STROKES[ch]) return onLoad(STROKES[ch]);
+    fetch(`https://cdn.jsdelivr.net/npm/hanzi-writer-data@2.0/${encodeURIComponent(ch)}.json`).then(r => r.json()).then(onLoad).catch(onErr);
+  }
+};
 async function writer(hz, mode) {
   const box = $('#writer');
-  box.innerHTML = '<p class="muted">Загрузка…</p>';
-  try { await loadWriter(); } catch { box.innerHTML = '<p class="muted">Нет сети: прописи недоступны офлайн.</p>'; return; }
+  if (typeof HanziWriter === 'undefined') { box.innerHTML = '<p class="muted">Библиотека прописей не загрузилась.</p>'; return; }
   box.innerHTML = '';
-  const size = Math.min(140, Math.floor((box.clientWidth - 8) / hz.length) - 6);
-  const writers = [...hz].map(ch => {
+  const chars = [...hz].filter(c => /[一-鿿]/.test(c));
+  const size = Math.max(80, Math.min(140, Math.floor((box.clientWidth - 8) / chars.length) - 8));
+  const writers = chars.map(ch => {
     const d = document.createElement('div'); d.className = 'hw'; box.appendChild(d);
-    return HanziWriter.create(d, ch, { width: size, height: size, padding: 4, showOutline: true, strokeColor: '#16181d', radicalColor: '#c8102e', strokeAnimationSpeed: 1, delayBetweenStrokes: 200, showHintAfterMisses: 2, highlightOnComplete: true, onLoadCharDataError: () => { d.innerHTML = '<span class="muted">?</span>'; } });
+    return HanziWriter.create(d, ch, Object.assign({ width: size, height: size, padding: 4, showOutline: true, strokeColor: '#16181d', radicalColor: '#c8102e', drawingColor: '#c8102e', drawingWidth: 8, strokeAnimationSpeed: 1, delayBetweenStrokes: 200, showHintAfterMisses: 2, highlightOnComplete: true, onLoadCharDataError: () => { d.innerHTML = '<span class="muted">?</span>'; } }, HW_OPTS));
   });
   if (mode === 'animate') { for (const w of writers) await new Promise(r => w.animateCharacter({ onComplete: r })); }
-  else writers.forEach(w => w.quiz());
+  else writers.forEach(w => { w.hideCharacter(); w.quiz(); });
+}
+
+function dialogTokens(d) { return d.lines.flatMap(l => l[1].split(' ')).filter(t => /[一-鿿]/.test(t)); }
+function gloss(d, tk) {
+  const ex = Object.assign({}, d.extra || {}, d.extra2 || {});
+  if (BY_HZ[tk]) return [BY_HZ[tk].py, BY_HZ[tk].ru, isLearned(tk)];
+  if (ex[tk]) return [ex[tk][0], ex[tk][1], false];
+  if (typeof EXTRA_GLOSS !== 'undefined' && EXTRA_GLOSS[tk]) return [EXTRA_GLOSS[tk][0], EXTRA_GLOSS[tk][1], true];
+  return null;
+}
+function unknownCount(d) {
+  const seen = new Set(); let n = 0;
+  dialogTokens(d).forEach(tk => { if (seen.has(tk)) return; seen.add(tk); const g = gloss(d, tk); if (!g || !g[2]) n++; });
+  return n;
+}
+function renderReading() {
+  if (route.dialog) return renderDialog(DIALOGS.find(d => d.id === route.dialog));
+  setTop('Чтение');
+  view.innerHTML = `<p class="muted" style="margin-bottom:12px">Диалоги на словах курса. Нажмите реплику, чтобы услышать её, и слово, чтобы увидеть перевод. Красным подчёркнуты слова, которых ещё не было в ваших уроках.</p>
+    <div class="list">${DIALOGS.map(d => { const unk = unknownCount(d); const done = S.dialogsDone[d.id]; return `<button class="row ${done ? 'done' : ''}" data-d="${d.id}"><span class="ic">💬</span><span><div class="t">${esc(d.title)}</div><div class="s">${d.lines.length} реплик · после урока ${d.after}${unk ? ` · ${unk} ${plural(unk, 'новое слово', 'новых слова', 'новых слов')}` : ''}${done ? ' · прочитано' : ''}</div></span><span class="chev">${done ? '✓' : '›'}</span></button>`; }).join('')}</div>`;
+  view.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { route.dialog = b.dataset.d; render(); });
+}
+const readOpts = { py: true, ru: false };
+function renderDialog(d) {
+  setTop(d.title);
+  const linesHtml = d.lines.map((l, i) => `<div class="bubble ${l[0] === 'B' ? 'b' : ''}" data-i="${i}"><div class="who">${l[0] === 'A' ? 'А' : 'Б'}</div><div class="hz">${l[1].split(' ').map(tk => { const g = gloss(d, tk); if (!g) return esc(tk); return `<span class="tk ${g[2] ? '' : 'unk'}" data-tk="${esc(tk)}">${esc(tk)}</span>`; }).join('')}</div><div class="py" ${readOpts.py ? '' : 'hidden'}>${pinyinHtml(l[2])}</div><div class="ru" ${readOpts.ru ? '' : 'hidden'}>${esc(l[3])}</div></div>`).join('');
+  view.innerHTML = `
+    <div class="dlg-tools"><button class="chip ${readOpts.py ? 'active' : ''}" id="tPy">Пиньинь</button><button class="chip ${readOpts.ru ? 'active' : ''}" id="tRu">Перевод</button><button class="chip" id="tAll">▶ Прослушать всё</button></div>
+    <div class="dlg">${linesHtml}</div>
+    <div class="quiz" id="quiz"><h3>Проверьте себя</h3>${d.quiz.map((q, qi) => `<div class="q" data-q="${qi}"><p><b>${esc(q.q)}</b></p>${q.opts.map((o, oi) => `<button class="opt" data-o="${oi}">${esc(o)}</button>`).join('')}</div>`).join('')}<div id="quizResult"></div></div>`;
+  $('#tPy').onclick = () => { readOpts.py = !readOpts.py; renderDialog(d); };
+  $('#tRu').onclick = () => { readOpts.ru = !readOpts.ru; renderDialog(d); };
+  $('#tAll').onclick = () => speakLines(d.lines.map(l => l[1]));
+  view.querySelectorAll('.bubble').forEach(b => b.onclick = e => {
+    if (e.target.classList.contains('tk')) { const g = gloss(d, e.target.dataset.tk); if (g) toast(`${e.target.dataset.tk} · ${g[0]} · ${g[1]}`); return; }
+    speak(d.lines[+b.dataset.i][1]);
+  });
+  const answers = {};
+  view.querySelectorAll('.q').forEach(qEl => qEl.querySelectorAll('.opt').forEach(o => o.onclick = () => {
+    const qi = +qEl.dataset.q, oi = +o.dataset.o, q = d.quiz[qi];
+    if (answers[qi] !== undefined) return;
+    answers[qi] = oi === q.a;
+    qEl.querySelectorAll('.opt').forEach(x => { x.disabled = true; if (+x.dataset.o === q.a) x.classList.add('right'); });
+    if (oi !== q.a) o.classList.add('wrong');
+    if (Object.keys(answers).length === d.quiz.length) {
+      const right = Object.values(answers).filter(Boolean).length;
+      const first = !S.dialogsDone[d.id];
+      if (first && right >= Math.ceil(d.quiz.length / 2)) { S.dialogsDone[d.id] = true; addXp(10); touchStreak(); save(); }
+      $('#quizResult').innerHTML = `<p class="muted" style="margin-top:8px">${right} из ${d.quiz.length} верно.${first && S.dialogsDone[d.id] ? ' Диалог засчитан, +10 очков.' : ''}</p>`;
+    }
+  }));
+}
+function speakLines(texts) {
+  if (!('speechSynthesis' in window)) return;
+  speechSynthesis.cancel();
+  texts.forEach(t => { const u = new SpeechSynthesisUtterance(t.replace(/\s+/g, '')); u.lang = 'zh-CN'; if (zhVoice) u.voice = zhVoice; u.rate = S.settings.rate; speechSynthesis.speak(u); });
 }
 
 /* ---------- 8. Запуск ---------- */
-document.querySelectorAll('.tab').forEach(b => b.onclick = () => { route.tab = b.dataset.tab; route.lesson = null; route.page = null; $('#fab').hidden = true; render(); });
-$('#btnBack').onclick = () => { route.lesson = null; route.page = null; $('#fab').hidden = true; render(); };
+document.querySelectorAll('.tab').forEach(b => b.onclick = () => { route.tab = b.dataset.tab; route.lesson = null; route.page = null; route.dialog = null; $('#fab').hidden = true; render(); });
+$('#btnBack').onclick = () => { route.lesson = null; route.page = null; route.dialog = null; $('#fab').hidden = true; render(); };
 render();
 document.addEventListener('visibilitychange', () => { if (!document.hidden && !session && route.tab === 'home') render(); });
 if ('serviceWorker' in navigator && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
