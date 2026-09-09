@@ -185,7 +185,7 @@ function endSession() {
       <h2>${s.mode === 'lesson' ? 'Урок пройден' : 'Повторение закончено'}</h2>
       <div class="done-stats">
         <div><b>${s.correct}</b><span>верно</span></div>
-        <div><b>${s.wrong}</b><span>ошибок</span></div>
+        <div><b>${s.wrong}</b><span>${plural(s.wrong, 'ошибка', 'ошибки', 'ошибок')}</span></div>
         <div><b>+${s.xp}</b><span>очков</span></div>
       </div>
       <p class="muted">${s.mode === 'lesson' ? 'Слова урока попали в повторение. Завтра приложение спросит их снова.' : 'Следующая порция придёт, когда подойдёт срок.'}</p>
