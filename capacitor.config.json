@@ -1,0 +1,9 @@
+{
+  "appId": "ru.mazurov.nihao",
+  "appName": "Нихао",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#f4f3ef"
+  }
+}

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#16181d"/>
+  <text x="256" y="312" font-family="'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif" font-size="190" font-weight="700" fill="#ffffff" text-anchor="middle">你</text>
+  <circle cx="380" cy="150" r="36" fill="#c8102e"/>
+</svg>
