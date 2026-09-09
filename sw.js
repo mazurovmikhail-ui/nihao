@@ -1,5 +1,5 @@
 /* Офлайн-кэш оболочки. Прогресс пользователя в localStorage, его это не касается. */
-const CACHE = 'nihao-v6';
+const CACHE = 'nihao-v7';
 const SHELL = ['./', './index.html', './styles.css', './app.js', './data.js', './data-hsk2.js', './data-hsk3.js', './data-hsk3b.js', './data-dialogs.js', './data-pics.js', './data-hsk4a.js', './data-hsk4b.js', './data-hsk4c.js', './data-hsk4d.js', './data-dialogs2.js', './data-culture.js', './data-tones.js', './decomp.js', './strokes.js', './hanzi-writer.min.js', './manifest.webmanifest', './icon.svg', './icon-maskable.svg', './privacy.html'];
 
 self.addEventListener('install', e => {

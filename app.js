@@ -673,6 +673,7 @@ function renderMore() {
       <label class="check"><input type="checkbox" id="autoplay" ${st.autoplay ? 'checked' : ''}><span>Озвучивать автоматически и листать верные ответы</span></label>
       <label class="check"><input type="checkbox" id="pyt" ${st.pinyinInTasks ? 'checked' : ''}><span>Показывать пиньинь в упражнениях (снимите, когда узнаёте иероглифы)</span></label>
       <button class="btn btn-light block" id="testVoice">Проверить китайский голос</button>
+      <p class="small">Распознавание речи для упражнения «Произнесите вслух»: ${SPEECH_OK === null ? 'проверяется…' : SPEECH_OK ? 'доступно' : 'недоступно на этом устройстве. Android: Настройки → Язык и ввод → Голосовой ввод, добавить китайский. Если распознавателя нет вовсе, упражнение не показывается.'}</p>
       <p class="small">${zhVoice ? `Голос: ${esc(zhVoice.name)}` : 'Китайский голос в системе не найден. Android: Настройки → Язык и ввод → Синтез речи → установить китайский. iPhone: Настройки → Универсальный доступ → Устный контент → Голоса → Китайский.'}</p>
     </div>
     <div class="card"><h2>Прогресс</h2>
@@ -684,7 +685,7 @@ function renderMore() {
     <div class="card"><h2>О приложении</h2>
       <p class="muted">Курс: ${ALL_WORDS.length} ${plural(ALL_WORDS.length, 'слово', 'слова', 'слов')} уровней HSK 1, 2 и 3 в ${LESSONS.length} ${plural(LESSONS.length, 'уроке', 'уроках', 'уроках')} с грамматикой, тоны, ключи иероглифов, интервальное повторение, ${DIALOGS.length} диалогов для чтения, прописи с проверкой черт. Бесплатно и без рекламы.</p>
       <p class="small">Словарь сверен ${CONTENT_VERIFIED}. Исходники открыты: github.com/mazurovmikhail-ui/nihao</p>
-      <p class="small">Версия 0.4 · <a href="privacy.html" target="_blank">Политика конфиденциальности</a></p>
+      <p class="small">Версия 0.4.1 · <a href="privacy.html" target="_blank">Политика конфиденциальности</a></p>
     </div>`;
   $('#goal').onchange = e => { st.goal = +e.target.value; save(); };
   $('#rate').oninput = e => { st.rate = +e.target.value; save(); };
@@ -811,12 +812,28 @@ const CHAR_PY = (() => {
   return m;
 })();
 
+/* В нативной сборке плагин регистрируется вручную: сборщика модулей нет, поэтому
+   Capacitor.Plugins его сам не подхватывает. Доступность проверяется один раз при запуске. */
+let SPEECH_NATIVE = null, SPEECH_OK = null;
+function nativeSpeech() {
+  const C = window.Capacitor;
+  if (!C || !C.isNativePlatform || !C.isNativePlatform()) return null;
+  if (SPEECH_NATIVE) return SPEECH_NATIVE;
+  if (C.Plugins && C.Plugins.SpeechRecognition) return (SPEECH_NATIVE = C.Plugins.SpeechRecognition);
+  try { SPEECH_NATIVE = C.registerPlugin('SpeechRecognition'); } catch (e) { SPEECH_NATIVE = null; }
+  return SPEECH_NATIVE;
+}
+async function probeSpeech() {
+  const P = nativeSpeech();
+  if (P) { try { const a = await P.available(); SPEECH_OK = !!(a && a.available); } catch (e) { SPEECH_OK = false; } }
+  else SPEECH_OK = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+}
 function recognizerAvailable() {
-  const P = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.SpeechRecognition;
-  return !!(P || window.SpeechRecognition || window.webkitSpeechRecognition);
+  if (SPEECH_OK !== null) return SPEECH_OK;
+  return !!(nativeSpeech() || window.SpeechRecognition || window.webkitSpeechRecognition);
 }
 async function recognize() {
-  const P = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.SpeechRecognition;
+  const P = nativeSpeech();
   if (P) {
     const a = await P.available();
     if (!a.available) throw new Error('unavailable');
@@ -932,6 +949,7 @@ function bindDecomp(root) {
 document.querySelectorAll('.tab').forEach(b => b.onclick = () => { route.tab = b.dataset.tab; route.lesson = null; route.page = null; route.dialog = null; $('#fab').hidden = true; render(); });
 $('#btnBack').onclick = () => { route.lesson = null; route.page = null; route.dialog = null; $('#fab').hidden = true; render(); };
 render();
+probeSpeech().then(() => { if (route.tab === 'home' && !session) render(); });
 document.addEventListener('visibilitychange', () => { if (!document.hidden && !session && route.tab === 'home') render(); });
 if ('serviceWorker' in navigator && !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
